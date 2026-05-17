@@ -1,0 +1,21 @@
+# dependencies
+node_modules/
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+
+# build output
+dist/
+*.tsbuildinfo
+
+# runtime artifacts
+*.log
+.server.log
+.server.pid
+
+# local environment & IDE
+.claude/settings.local.json
+
+# OS files
+.DS_Store
+Thumbs.db

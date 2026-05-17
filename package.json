@@ -1,0 +1,38 @@
+{
+  "name": "pm2-web-ctl",
+  "version": "1.0.0",
+  "description": "PM2 process manager web UI",
+  "bin": {
+    "pm2ctl": "./bin/pm2ctl.js"
+  },
+  "files": [
+    "bin",
+    "backend/server.js",
+    "frontend/dist"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "PORT=3457 npm run dev --prefix backend",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "build": "npm run build --prefix frontend",
+    "start": "node backend/server.js",
+    "install:all": "npm install && npm install --prefix backend && npm install --prefix frontend",
+    "prepublishOnly": "npm run build --prefix frontend"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "pm2": "^5.4.3"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  },
+  "keywords": [
+    "pm2",
+    "process-manager",
+    "web-ui",
+    "monitoring",
+    "dashboard"
+  ],
+  "license": "MIT"
+}
