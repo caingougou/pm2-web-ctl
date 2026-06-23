@@ -185,41 +185,93 @@ function createApp() {
     if (!Array.isArray(pids)) {
       return res.status(400).json({ error: 'pids must be an array' });
     }
+
     const result = {};
-    for (const pid of pids) {
-      if (!pid || pid <= 0) continue;
+
+    // Linux: ss -tlnp — avoids lsof breakage on processes whose /proc/PID/comm
+    // is truncated with '(' by the kernel 16-byte limit (e.g. Next.js v16).
+    // macOS/others: lsof — no comm truncation issue.
+    if (process.platform === 'linux') {
+      const allPids = new Set();
+      const childToRoot = {};
+      for (const pid of pids) {
+        if (!pid || pid <= 0) continue;
+        try {
+          const tree = getProcessTree(pid);
+          for (const childPid of tree) {
+            allPids.add(childPid);
+            childToRoot[childPid] = pid;
+          }
+        } catch {}
+      }
+      if (allPids.size === 0) {
+        return res.json({ data: {} });
+      }
       try {
-        const tree = getProcessTree(pid);
-        const pidList = tree.join(',');
-        const cmd = 'lsof -a -p ' + pidList + ' -iTCP -sTCP:LISTEN -n -P 2>/dev/null';
-        const output = execSync(cmd, { timeout: 5000, encoding: 'utf-8' });
-        const seen = new Set();
-        const ports = [];
-        for (const line of output.split('\n').slice(1)) {
-          const parts = line.trim().split(/\s+/);
-          const addr = parts[parts.length - 2];
-          if (addr && addr.includes(':')) {
-            const lastColon = addr.lastIndexOf(':');
-            const portStr = addr.slice(lastColon + 1);
-            const port = parseInt(portStr);
-            if (port && !isNaN(port) && !seen.has(port)) {
-              seen.add(port);
-              let host = addr.slice(0, lastColon);
-              if (host.includes('*') || host === '[::]' || host === '::') {
-                host = '0.0.0.0';
-              } else if (host === '[::1]' || host === '::1') {
-                host = '127.0.0.1';
-              } else if (host.startsWith('[') && host.endsWith(']')) {
-                host = host.slice(1, -1);
+        const out = execSync('ss -tlnp -H 2>/dev/null', { timeout: 5000, encoding: 'utf-8' });
+        for (const line of out.split('\n')) {
+          const m = line.match(/\s+([^\s]+):(\d+)\s+.*users:\(\("([^"]+)".*pid=(\d+)/);
+          if (m) {
+            const pid = parseInt(m[4]);
+            if (allPids.has(pid)) {
+              const rootPid = childToRoot[pid];
+              const addr = m[1];
+              const port = parseInt(m[2]);
+              if (port && !isNaN(port)) {
+                let host = addr;
+                if (host.includes('*') || host === '[::]' || host === '::') {
+                  host = '0.0.0.0';
+                } else if (host === '[::1]' || host === '::1') {
+                  host = '127.0.0.1';
+                } else if (host.startsWith('[') && host.endsWith(']')) {
+                  host = host.slice(1, -1);
+                }
+                if (!result[rootPid]) result[rootPid] = [];
+                const seen = new Set(result[rootPid].map(p => `${p.host}:${p.port}`));
+                if (!seen.has(`${host}:${port}`)) {
+                  result[rootPid].push({ port, host });
+                }
               }
-              ports.push({ port, host });
             }
           }
         }
-        if (ports.length > 0) result[pid] = ports;
-      } catch {
+      } catch {}
+    } else {
+      for (const pid of pids) {
+        if (!pid || pid <= 0) continue;
+        try {
+          const tree = getProcessTree(pid);
+          const pidList = tree.join(',');
+          const cmd = 'lsof -a -p ' + pidList + ' -iTCP -sTCP:LISTEN -n -P 2>/dev/null';
+          const output = execSync(cmd, { timeout: 5000, encoding: 'utf-8' });
+          const seen = new Set();
+          const ports = [];
+          for (const line of output.split('\n').slice(1)) {
+            const parts = line.trim().split(/\s+/);
+            const addr = parts[parts.length - 2];
+            if (addr && addr.includes(':')) {
+              const lastColon = addr.lastIndexOf(':');
+              const portStr = addr.slice(lastColon + 1);
+              const port = parseInt(portStr);
+              if (port && !isNaN(port) && !seen.has(port)) {
+                seen.add(port);
+                let host = addr.slice(0, lastColon);
+                if (host.includes('*') || host === '[::]' || host === '::') {
+                  host = '0.0.0.0';
+                } else if (host === '[::1]' || host === '::1') {
+                  host = '127.0.0.1';
+                } else if (host.startsWith('[') && host.endsWith(']')) {
+                  host = host.slice(1, -1);
+                }
+                ports.push({ port, host });
+              }
+            }
+          }
+          if (ports.length > 0) result[pid] = ports;
+        } catch {}
       }
     }
+
     res.json({ data: result });
   });
 
