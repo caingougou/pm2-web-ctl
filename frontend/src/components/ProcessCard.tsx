@@ -41,20 +41,32 @@ interface ProcessCardProps {
   ports?: PortInfo[]
   onAction: (name: string, action: 'start' | 'stop' | 'restart' | 'reload' | 'delete') => void
   loading?: boolean
+  selected?: boolean
+  onSelect?: (name: string) => void
 }
 
-export default function ProcessCard({ process, ports, onAction, loading }: ProcessCardProps) {
+export default function ProcessCard({ process, ports, onAction, loading, selected, onSelect }: ProcessCardProps) {
   const navigate = useNavigate()
   const { name, pm_id, monit, pm2_env, pid } = process
   const status = pm2_env?.status || 'unknown'
   const [deleteOpen, setDeleteOpen] = useState(false)
 
+  const handleCardClick = (e: React.MouseEvent) => {
+    if (!onSelect) return
+    // Let buttons/links (actions, details, ports) behave normally.
+    if ((e.target as HTMLElement).closest('button, a, input')) return
+    onSelect(name)
+  }
+
   return (
-    <Card className="transition-shadow hover:shadow-md">
+    <Card
+      className={`transition-shadow hover:shadow-md ${onSelect ? 'cursor-pointer' : ''} ${selected ? 'ring-2 ring-primary' : ''}`}
+      onClick={handleCardClick}
+    >
       <CardContent className="p-5">
         <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center gap-2 min-w-0">
-            <div className={`h-2.5 w-2.5 rounded-full shrink-0 ${
+          <div className="flex items-start gap-2 min-w-0">
+            <div className={`h-2.5 w-2.5 rounded-full shrink-0 mt-[5px] ${
               status === 'online' ? 'bg-green-500' :
               status === 'stopped' ? 'bg-gray-400' :
               status === 'errored' ? 'bg-red-500' :
@@ -70,6 +82,9 @@ export default function ProcessCard({ process, ports, onAction, loading }: Proce
               </button>
               <span className="text-xs text-muted-foreground">
                 PID {pid} &middot; pm_id {pm_id}
+                {pm2_env?.namespace && pm2_env.namespace !== 'default' && (
+                  <> &middot; {pm2_env.namespace}</>
+                )}
               </span>
             </div>
           </div>

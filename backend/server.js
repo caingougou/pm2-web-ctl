@@ -158,7 +158,8 @@ function createApp() {
   }));
 
   app.get('/api/dump-info', pm2Action((req, res) => {
-    const dumpPath = path.join(process.env.PM2_HOME || path.join(require('os').homedir(), '.pm2'), 'dump.pm2');
+    const pm2Home = process.env.PM2_HOME || path.join(require('os').homedir(), '.pm2');
+    const dumpPath = path.join(pm2Home, 'dump.pm2');
     try {
       const stat = fs.statSync(dumpPath);
       const content = fs.readFileSync(dumpPath, 'utf-8');
@@ -166,12 +167,24 @@ function createApp() {
       try {
         processes = JSON.parse(content);
       } catch {}
+      if (!Array.isArray(processes)) processes = [];
+      // Exclude PM2 modules (e.g. pm2-logrotate): they are managed by
+      // `pm2 install`, not by the dump/resurrect cycle, so they must not
+      // count as save drift. Module names match their dir in $PM2_HOME/modules.
+      let moduleNames = new Set();
+      try {
+        moduleNames = new Set(fs.readdirSync(path.join(pm2Home, 'modules')));
+      } catch {}
+      const process_names = processes
+        .map((p) => p && p.name)
+        .filter((n) => typeof n === 'string' && n && !moduleNames.has(n));
       res.json({
         data: {
           exists: true,
           modified: stat.mtime,
           size: stat.size,
-          process_count: Array.isArray(processes) ? processes.length : 0,
+          process_count: processes.length,
+          process_names,
           path: dumpPath,
         },
       });

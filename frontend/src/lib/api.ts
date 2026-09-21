@@ -10,6 +10,7 @@ export interface PM2Process {
   }
   pm2_env: {
     status: string
+    pmx_module?: boolean
     pm_uptime: number
     unstable_restarts: number
     restart_time: number
@@ -49,6 +50,7 @@ export interface DumpInfo {
   modified?: string
   size?: number
   process_count?: number
+  process_names?: string[]
   path: string
 }
 
